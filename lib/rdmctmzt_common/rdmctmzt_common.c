@@ -71,6 +71,11 @@ uint16_t Mode_Switch_Debounce_Timer   = 0;
 bool     Show_Mode_Indicator  = false;
 uint16_t Mode_Indicator_Timer = 0;
 
+// USB auto-switch state tracking
+#if USB_AUTO_SWITCH_ENABLE
+static bool Usb_Power_Previous_State = false;
+#endif
+
 // WAKEUP_IRQHandler
 OSAL_IRQ_HANDLER(Vector4C) {
     md_syscfg_clear_flag_wakeup(SYSCFG);
@@ -353,8 +358,26 @@ OSAL_IRQ_HANDLER(Vector78) {
             } else {
                 es_stdby_pin_state = 2;
             }
+
+#if USB_AUTO_SWITCH_ENABLE
+            // Auto-switch to USB mode when USB cable is plugged in
+            if (!Usb_Power_Previous_State && Keyboard_Info.Key_Mode != QMK_USB_MODE) {
+                // USB was just plugged in and we're not in USB mode - switch to USB
+                Keyboard_Info.Key_Mode = QMK_USB_MODE;
+                Spi_Send_Commad(USER_SWITCH_USB_MODE);
+                es_restart_usb_driver();
+                Led_Rf_Pair_Flg = false;
+                // Show mode indicator
+                Show_Mode_Indicator  = true;
+                Mode_Indicator_Timer = timer_read();
+            }
+            Usb_Power_Previous_State = true;
+#endif
         } else {
             es_stdby_pin_state = 0;
+#if USB_AUTO_SWITCH_ENABLE
+            Usb_Power_Previous_State = false;
+#endif
         }
 
         Time_3s_Count++;
@@ -433,7 +456,7 @@ void Init_Keyboard_Infomation(void) {
         Keyboard_Info.Win_Lock     = INIT_WIN_NLOCK;
 #if LOGO_LED_ENABLE
         Keyboard_Info.Logo_On_Off     = 1;
-        Keyboard_Info.Logo_Mode       = 0;
+        Keyboard_Info.Logo_Mode       = 1; // Wave animation (LOGO_MODE_WAVE)
         Keyboard_Info.Logo_Hue        = 0;
         Keyboard_Info.Logo_Saturation = 255;
         Keyboard_Info.Logo_Brightness = 180;
@@ -448,7 +471,7 @@ void Init_Keyboard_Infomation(void) {
         Keyboard_Info.Win_Lock     = INIT_WIN_NLOCK;
 #if LOGO_LED_ENABLE
         Keyboard_Info.Logo_On_Off     = 1;
-        Keyboard_Info.Logo_Mode       = 0;
+        Keyboard_Info.Logo_Mode       = 1; // Wave animation (LOGO_MODE_WAVE)
         Keyboard_Info.Logo_Hue        = 0;
         Keyboard_Info.Logo_Saturation = 255;
         Keyboard_Info.Logo_Brightness = 180;
